@@ -24,7 +24,7 @@ jsoncpp (https://github.com/open-source-parsers/jsoncpp) is needed too and inclu
 ### Server:
 tftrue_gamedesc  
 Server owners can use this cvar to set specific text in the game description of their server.
-There is a 40 character max, and your text will appear after 'TFTrue'
+There is a 40 character max.
 
 tftrue_freezecam  
 Enables/disables the freeze cam. Default is 1 (enabled).
