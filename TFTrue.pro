@@ -13,7 +13,7 @@ CONFIG(debug, debug|release) {
 }
 
 unix {
-        SOURCE_DIR = $(HOME)/Documents/Projects/source-sdk-2013/mp/src
+        SOURCE_DIR = $(HOME)/tftrue/source-sdk-2013/mp/src
 
         DEFINES += \
                 GNUC \
@@ -21,7 +21,8 @@ unix {
                 _LINUX \
                 LINUX \
                 RAD_TELEMETRY_DISABLED \
-                NO_MALLOC_OVERRIDE
+                NO_MALLOC_OVERRIDE \
+                NO_AUTOUPDATE
         QMAKE_CXXFLAGS = \
                 -march=pentium3 -mmmx -msse -m32 -Wall -Werror \
                 -fvisibility=hidden -fvisibility-inlines-hidden \
@@ -120,3 +121,4 @@ QMAKE_INCDIR += $${SOURCE_DIR}/game/shared
 QMAKE_INCDIR += $${SOURCE_DIR}/game/server
 QMAKE_INCDIR += ./FunctionRoute
 QMAKE_INCDIR += ./ModuleScanner
+

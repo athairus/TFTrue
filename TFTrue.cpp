@@ -332,15 +332,16 @@ void CTFTrue::ServerActivate( edict_t *pEdictList, int edictCount, int clientMax
 // This function will create an accurate game name for us
 void CTFTrue::UpdateGameDesc()
 {
-	V_snprintf(m_szGameDesc, sizeof(m_szGameDesc), "TFTrue %s ", tftrue_gamedesc.GetString());
+	V_snprintf(m_szGameDesc, sizeof(m_szGameDesc), "%s", tftrue_gamedesc.GetString());
 
 	if(g_GameServerSteamPipe() && g_GameServerSteamUser() && g_pSteamClient)
 	{
 		// g_pSteamGameServer ptr can change
 		g_pSteamGameServer = (ISteamGameServer*)g_pSteamClient->GetISteamGameServer(g_GameServerSteamUser(), g_GameServerSteamPipe(), STEAMGAMESERVER_INTERFACE_VERSION);
 
-		if(g_pSteamGameServer)
+		if(g_pSteamGameServer) {
 			g_pSteamGameServer->SetGameDescription(m_szGameDesc);
+		}
 	}
 }
 
