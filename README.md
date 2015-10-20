@@ -11,7 +11,7 @@ Red Comet: Original TFTrue developer
 For now, the project uses qmake which means it needs to be opened in Qt Creator.
 Is it recommended to compile it with MSVC 2013 on Windows, gcc 4.9 or clang 3.5 on Linux but it might work with older and/or newer versions.
 
-You will need to adjust SOURCE_DIR in TFTrue.pro to point to the source SDK 2013 "mp/src" directory (https://github.com/ValveSoftware/source-sdk-2013).
+You will need to adjust SOURCE_DIR in TFTrue.pro to point to the source SDK 2013 "mp/src" directory (https://github.com/AnAkIn1/source-sdk-2013).
 
 # Additional dependencies
 
@@ -41,28 +41,16 @@ Enables/disables the misc items. Default is 0 (misc items enabled).
 tftrue_no_action  
 Enables/disables action items. Default is 0 (action items enabled).
 
-tftrue_whitelist  
-Sets specific league item whitelists. This can be useful for public servers.
-0: None
-1: ETF2L 6on6
-2: ETF2L 9on9
-Default is 0.
-
 tftrue_whitelist_id  
-Sets a whitelist id from whitelist.tf. If this is set, tftrue_whitelist is ignored. Default is -1 (disabled).
+Sets a whitelist id from whitelist.tf. Default is -1 (disabled).
 
 tftrue_tournament_config  
 Sets specific league configs. It will auto download the configs and execute them depending of the map type.
-If you use this, you do not need to set tftrue_whitelist as mp_tournament_whitelist is already set in the league configs.
+If you use this, you do not need to set tftrue_whitelist_id as mp_tournament_whitelist is already set in the league configs.
 0: None
 1: ETF2L 6on6
 2: ETF2L 9on9
 Default is 1.
-
-tftrue_tv_delaymapchange  
-Delay the map change depending of tv_delay value when SourceTV is enabled in tournament mode. This way the spectators will not miss the end of the match.
-You should use "changelevel" right after you finished the current map and the map will changes depending of tv_delay value.
-A message will be printed in the chat every 30 seconds announcing in how much time the map will change. Default is 1 (enabled).
 
 tftrue_tv_autorecord  
 Turn on auto STV recording when both teams are ready in tournament mode. It will stops when the win conditions are reached. Default is 1 (enabled).
@@ -131,7 +119,6 @@ In the chat, you can type !speedmeter [on/off] while tftrue_bunnyhop is enabled,
 - Tournament whitelists working without tournament mode (for pub servers)
 - Changing mp_tournament_whitelist will automatically reload the whitelist without requiring mp_tournament_restart
 - Console messages when allowing/removing whitelist items are removed to prevent spam
-- You can enable sv_pure even if the server wasn't started with -sv_pure or +sv_pure
 - You can write in the chat more than once when the game is paused
 - Removes the block on plugin_load that prevents you from using it after a map has been loaded
 

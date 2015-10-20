@@ -39,7 +39,7 @@
 CTFTrue g_Plugin;
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CTFTrue, IServerPluginCallbacks, INTERFACEVERSION_ISERVERPLUGINCALLBACKS, g_Plugin )
 
-ConVar tftrue_version("tftrue_version", "4.70", FCVAR_NOTIFY|FCVAR_CHEAT, "Version of the plugin.", &CTFTrue::Version_Callback);
+ConVar tftrue_version("tftrue_version", "4.75", FCVAR_NOTIFY|FCVAR_CHEAT, "Version of the plugin.", &CTFTrue::Version_Callback);
 ConVar tftrue_gamedesc("tftrue_gamedesc", "", FCVAR_NONE, "Set the description you want to show in the game description column of the server browser. Max 40 characters.", &CTFTrue::GameDesc_Callback);
 ConVar tftrue_freezecam("tftrue_freezecam", "1", FCVAR_NOTIFY, "Activate/Desactivate the freezecam.", &CTFTrue::Freezecam_Callback);
 
@@ -56,12 +56,11 @@ IServerPluginHelpers* helpers = nullptr;
 IServer* g_pServer = nullptr;
 IGameMovement* gamemovement = nullptr;
 CGameMovement* g_pGameMovement = nullptr;
-ISteamClient* g_pSteamClient = nullptr;
-ISteamGameServer* g_pSteamGameServer = nullptr;
 IEngineReplay* g_pEngineReplay = nullptr;
 IServerGameClients* g_pGameClients = nullptr;
 IEngineTrace* g_pEngineTrace = nullptr;
 IServerTools* g_pServerTools = nullptr;
+CSteamGameServerAPIContext steam;
 
 //---------------------------------------------------------------------------------
 // Purpose: called when the plugin is loaded, load the interface we need from the engine
@@ -116,30 +115,7 @@ bool CTFTrue::Load( CreateInterfaceFn interfaceFactory, CreateInterfaceFn gameSe
 
 		g_pGameMovement = (CGameMovement*)gamemovement;
 
-#ifndef _LINUX
-		CSysModule *pSteamAPI = filesystem->LoadModule("../bin/steam_api.dll", "MOD", false);
-		CSysModule *pSteamClient = (CSysModule*)GetModuleHandle("steamclient.dll");
-		if(!pSteamClient)
-			pSteamClient = filesystem->LoadModule("../bin/steamclient.dll", "MOD", false);
-#else
-		CSysModule *pSteamAPI = filesystem->LoadModule("../bin/libsteam_api.so", "MOD", false);
-		CSysModule *pSteamClient = filesystem->LoadModule("../bin/steamclient.so", "MOD", false);
-#endif
-
-		if(pSteamAPI)
-		{
-			g_GameServerSteamPipe = (GetPipeFn)GetFuncAddress(pSteamAPI, "SteamGameServer_GetHSteamPipe");
-			g_GameServerSteamUser = (GetUserFn)GetFuncAddress(pSteamAPI, "SteamGameServer_GetHSteamUser");
-		}
-
-		CreateInterfaceFn steamclientFactory = NULL;
-		if(pSteamClient)
-		{
-			steamclientFactory = (CreateInterfaceFn)GetFuncAddress(pSteamClient, "CreateInterface");
-
-			if(steamclientFactory)
-				g_pSteamClient = (ISteamClient*)steamclientFactory(STEAMCLIENT_INTERFACE_VERSION, NULL);
-		}
+		steam.Init();
 
 		UpdateGameDesc();
 
@@ -164,8 +140,9 @@ bool CTFTrue::Load( CreateInterfaceFn interfaceFactory, CreateInterfaceFn gameSe
 
 		g_FOV.OnLoad();
 
-		GetGameDescriptionRoute.RouteVirtualFunction(gamedll, &IServerGameDLL::GetGameDescription, &CTFTrue::GetGameDescription);
-		ChangeLevelRoute.RouteVirtualFunction(engine, &IVEngineServer::ChangeLevel, &CTFTrue::ChangeLevel);
+		m_GetGameDescriptionRoute.RouteVirtualFunction(gamedll, &IServerGameDLL::GetGameDescription, &CTFTrue::GetGameDescription);
+		m_ChangeLevelRoute.RouteVirtualFunction(engine, &IVEngineServer::ChangeLevel, &CTFTrue::ChangeLevel);
+		m_GameServerSteamAPIActivatedRoute.RouteVirtualFunction(gamedll, &IServerGameDLL::GameServerSteamAPIActivated, &CTFTrue::GameServerSteamAPIActivated);
 
 		pEntList = g_pServerTools->GetEntityList();
 		g_pEntityList = pEntList;
@@ -271,28 +248,19 @@ void CTFTrue::SetCommandClient( int index )
 
 void CTFTrue::GameFrame( bool simulating )
 {
-	if(g_SourceTV.IsDelayingMapChange() && simulating)
-		g_SourceTV.UpdateMapChangeDelay();
-	else if(m_ForceChangeMap != FORCE_NONE)
+	if(m_bForceReloadMap)
 	{
-		if((gpGlobals->curtime > m_flNextMapChange) || !simulating)
+		if((gpGlobals->curtime > m_flNextReloadMap) || !simulating)
 		{
 			char szCommand[200];
 			CCommand args;
 			ConCommand *pChangelevel = g_pCVar->FindCommand("changelevel");
-			if(m_ForceChangeMap == FORCE_RELOADMAP)
-			{
-				V_snprintf(szCommand, sizeof(szCommand), "changelevel %s\n", gpGlobals->mapname.ToCStr());
-				args.Tokenize(szCommand);
-				ForwardCommand(pChangelevel, args);
-			}
-			else if(m_ForceChangeMap == FORCE_NEWMAP)
-			{
-				V_snprintf(szCommand, sizeof(szCommand), "changelevel %s\n", m_szNextMap);
-				args.Tokenize(szCommand);
-				ForwardCommand(pChangelevel, args);
-			}
-			m_ForceChangeMap = FORCE_NONE;
+
+			V_snprintf(szCommand, sizeof(szCommand), "changelevel %s\n", gpGlobals->mapname.ToCStr());
+			args.Tokenize(szCommand);
+			ForwardCommand(pChangelevel, args);
+
+			m_bForceReloadMap = false;
 		}
 	}
 #ifndef NO_AUTOUPDATE
@@ -321,8 +289,8 @@ PLUGIN_RESULT CTFTrue::ClientCommand( edict_t *pEntity, const CCommand &args )
 void CTFTrue::ServerActivate( edict_t *pEdictList, int edictCount, int clientMax )
 {
 	m_pEdictList = pEdictList;
-	m_flNextMapChange = 0.0f;
-	m_ForceChangeMap = FORCE_NONE;
+	m_flNextReloadMap = 0.0f;
+	m_bForceReloadMap = false;
 
 	g_Tournament.OnServerActivate();
 	g_Logs.OnServerActivate();
@@ -333,16 +301,9 @@ void CTFTrue::ServerActivate( edict_t *pEdictList, int edictCount, int clientMax
 void CTFTrue::UpdateGameDesc()
 {
 	V_snprintf(m_szGameDesc, sizeof(m_szGameDesc), "%s", tftrue_gamedesc.GetString());
-
-	if(g_GameServerSteamPipe() && g_GameServerSteamUser() && g_pSteamClient)
-	{
-		// g_pSteamGameServer ptr can change
-		g_pSteamGameServer = (ISteamGameServer*)g_pSteamClient->GetISteamGameServer(g_GameServerSteamUser(), g_GameServerSteamPipe(), STEAMGAMESERVER_INTERFACE_VERSION);
-
-		if(g_pSteamGameServer) {
-			g_pSteamGameServer->SetGameDescription(m_szGameDesc);
-		}
-	}
+	
+	if(steam.SteamGameServer())
+		steam.SteamGameServer()->SetGameDescription(m_szGameDesc);
 }
 
 const char* CTFTrue::GetGameDescription(IServerGameDLL *gamedll EDX2)
@@ -374,15 +335,10 @@ void CTFTrue::ClientSettingsChanged( edict_t *pEdict )
 	g_FOV.OnClientSettingsChanged(pEdict);
 }
 
-void CTFTrue::SetNextMap(const char *szNextMap)
+void CTFTrue::ForceReloadMap(float flTime)
 {
-	V_strncpy(m_szNextMap, szNextMap, sizeof(m_szNextMap));
-}
-
-void CTFTrue::ForceChangeMap(eForceChangeMap forcechangemap, float flTime)
-{
-	m_ForceChangeMap = forcechangemap;
-	m_flNextMapChange = flTime;
+	m_bForceReloadMap = true;
+	m_flNextReloadMap = flTime;
 }
 
 void CTFTrue::Version_Callback( IConVar *var, const char *pOldValue, float flOldValue )
@@ -395,6 +351,14 @@ void CTFTrue::Version_Callback( IConVar *var, const char *pOldValue, float flOld
 void CTFTrue::GameDesc_Callback( IConVar *var, const char *pOldValue, float flOldValue )
 {
 	g_Plugin.UpdateGameDesc();
+}
+
+void CTFTrue::GameServerSteamAPIActivated(IServerGameDLL *gamedll EDX2)
+{
+	typedef void (__thiscall *GameServerSteamAPIActivated_t)(IServerGameDLL *gamedll);
+	g_Plugin.m_GameServerSteamAPIActivatedRoute.CallOriginalFunction<GameServerSteamAPIActivated_t>()(gamedll);
+
+	steam.Init();
 }
 
 void CTFTrue::Say_Callback(ConCommand *pCmd, EDX const CCommand &args)
@@ -439,20 +403,7 @@ void CTFTrue::Say_Callback(ConCommand *pCmd, EDX const CCommand &args)
 				sprintf(szLine+iItemLineLength, " \003Whitelist:\005%s", g_Items.GetWhitelistName());
 		}
 		else
-		{
-			switch(tftrue_whitelist.GetInt())
-			{
-			case CTournament::CONFIG_NONE:
-				sprintf(szLine+iItemLineLength, " \003Whitelist: \005None");
-				break;
-			case CTournament::CONFIG_ETF2L6v6:
-				sprintf(szLine+iItemLineLength, " \003Whitelist: \005ETF2L 6v6");
-				break;
-			case CTournament::CONFIG_ETF2L9v9:
-				sprintf(szLine+iItemLineLength, " \003Whitelist: \005ETF2L 9v9");
-				break;
-			}
-		}
+			sprintf(szLine+iItemLineLength, " \003Whitelist: \005None");
 
 		Message(g_Plugin.GetCommandIndex()+1, "%s", szLine);
 
@@ -465,7 +416,6 @@ void CTFTrue::Say_Callback(ConCommand *pCmd, EDX const CCommand &args)
 
 		if(mp_tournament.GetBool() && !tf_gamemode_mvm.GetBool())
 		{
-			Message(g_Plugin.GetCommandIndex()+1, "\003Delay map change with STV: \005%s",(tftrue_tv_delaymapchange.GetBool() == true ) ? "On":"Off");
 			Message(g_Plugin.GetCommandIndex()+1, "\003STV Autorecord: \005%s",(tftrue_tv_autorecord.GetBool() == true ) ? "On":"Off");
 
 			switch(tftrue_tournament_config.GetInt())

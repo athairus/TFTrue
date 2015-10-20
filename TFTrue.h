@@ -69,18 +69,7 @@ public:
 
 	int GetCommandIndex() { return m_iClientCommandIndex; }
 
-	void SetNextMap(const char *szNextMap);
-	const char *GetNextMap() { return m_szNextMap; }
-
-	enum eForceChangeMap
-	{
-		FORCE_NONE = 0,
-		FORCE_RELOADMAP,
-		FORCE_NEWMAP
-	};
-
-	void ForceChangeMap( eForceChangeMap forcechangemap, float flTime = 0.0f);
-	eForceChangeMap GetForceChangeMap() { return m_ForceChangeMap ; }
+	void ForceReloadMap(float flTime = 0.0f);
 
 	void UpdateGameDesc();
 
@@ -96,19 +85,22 @@ private:
 	int m_iLoadCount = 0;
 	int m_iClientCommandIndex = 0;
 
-	eForceChangeMap m_ForceChangeMap = FORCE_NONE;
-	float m_flNextMapChange = 0.0f;
-	char m_szNextMap[150] = {};
+	bool m_bForceReloadMap = false;
+	float m_flNextReloadMap = 0.0f;
 
-	static const char* __fastcall GetGameDescription(IServerGameDLL *gamedll EDX2);
-	static void __fastcall ChangeLevel(IVEngineServer *pServer, EDX const char *s1, const char *s2);
 	char m_szGameDesc[50] = {};
 
-	CFunctionRoute GetGameDescriptionRoute;
-	CFunctionRoute ChangeLevelRoute;
+	static const char* __fastcall GetGameDescription(IServerGameDLL *gamedll EDX2);
+	CFunctionRoute m_GetGameDescriptionRoute;
 
-    static void __fastcall Say_Callback(ConCommand *pCmd, EDX const CCommand &args);
+	static void __fastcall ChangeLevel(IVEngineServer *pServer, EDX const char *s1, const char *s2);
+	CFunctionRoute m_ChangeLevelRoute;
+
+	static void __fastcall Say_Callback(ConCommand *pCmd, EDX const CCommand &args);
 	CFunctionRoute m_DispatchSayRoute;
+
+	static void __fastcall GameServerSteamAPIActivated(IServerGameDLL *gamedll EDX2);
+	CFunctionRoute m_GameServerSteamAPIActivatedRoute;
 };
 
 extern CTFTrue g_Plugin;

@@ -64,5 +64,4 @@ extern CItems g_Items;
 extern ConVar tftrue_no_hats;
 extern ConVar tftrue_no_misc;
 extern ConVar tftrue_no_action;
-extern ConVar tftrue_whitelist;
 extern ConVar tftrue_whitelist_id;

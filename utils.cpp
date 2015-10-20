@@ -36,9 +36,6 @@
 CSendProp g_SendProp;
 CEntityProps g_EntityProps;
 
-GetPipeFn g_GameServerSteamPipe;
-GetUserFn g_GameServerSteamUser;
-
 //-- Message things
 int GetMessageType(const char * MessageName)
 {
@@ -119,6 +116,7 @@ void TextMessage(int iClientIndex, const char *szMessage, ...)
 	va_end(vl);
 
 	MRecipientFilter filter;
+	filter.MakeReliable();
 	filter.AddRecipient( iClientIndex );
 	bf_write *pBuffer = engine->UserMessageBegin( &filter, GetMessageType("TextMsg") );
 	pBuffer->WriteByte( HUD_PRINTCENTER );
@@ -136,6 +134,7 @@ void Message(int iClientIndex, const char *szMessage, ...)
 	va_end(vl);
 
 	MRecipientFilter filter;
+	filter.MakeReliable();
 	filter.AddRecipient( iClientIndex );
 	bf_write *pBuffer = engine->UserMessageBegin( &filter, GetMessageType("SayText") );
 	pBuffer->WriteByte( iClientIndex );
@@ -155,6 +154,7 @@ void AllMessage(int iClientIndex, const char *szMessage, ...)
 	va_end(vl);
 
 	MRecipientFilter filter;
+	filter.MakeReliable();
 	filter.AddAllPlayers();
 	bf_write *pBuffer = engine->UserMessageBegin( &filter, GetMessageType("SayText") );
 
@@ -178,6 +178,7 @@ void AllMessage(const char *szMessage, ...)
 	va_end(vl);
 
 	MRecipientFilter filter;
+	filter.MakeReliable();
 	filter.AddAllPlayers();
 	bf_write *pBuffer = engine->UserMessageBegin( &filter, GetMessageType("SayText") );
 
@@ -480,20 +481,7 @@ void PrintTFTrueInfos(edict_t *pEntity)
 			sprintf(Line+iItemLineLength, " | Whitelist:%s\n", g_Items.GetWhitelistName());
 	}
 	else
-	{
-		switch(tftrue_whitelist.GetInt())
-		{
-		case CTournament::CONFIG_NONE:
-			sprintf(Line+iItemLineLength, " | Whitelist: None\n");
-			break;
-		case CTournament::CONFIG_ETF2L6v6:
-			sprintf(Line+iItemLineLength, " | Whitelist: ETF2L 6v6\n");
-			break;
-		case CTournament::CONFIG_ETF2L9v9:
-			sprintf(Line+iItemLineLength, " | Whitelist: ETF2L 9v9\n");
-			break;
-		}
-	}
+		sprintf(Line+iItemLineLength, " | Whitelist: None\n");
 
 	engine->ClientPrintf(pEntity,Line);
 
@@ -509,8 +497,6 @@ void PrintTFTrueInfos(edict_t *pEntity)
 
 	if(mp_tournament.GetBool() && !tf_gamemode_mvm.GetBool())
 	{
-		sprintf(Line,"Delay map change with STV: %s\n",(tftrue_tv_delaymapchange.GetBool() == true ) ? "On":"Off");
-		engine->ClientPrintf(pEntity,Line);
 		sprintf(Line,"STV Autorecord: %s\n",(tftrue_tv_autorecord.GetBool() == true ) ? "On":"Off");
 		engine->ClientPrintf(pEntity,Line);
 		

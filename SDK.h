@@ -19,7 +19,6 @@
 #pragma once
 
 #define GAME_DLL 1
-#define VERSION_SAFE_STEAM_API_INTERFACES
 
 // Fix INVALID_HANDLE_VALUE redefinition warning
 #ifndef _LINUX
@@ -38,6 +37,9 @@
 
 #include "tier0/icommandline.h"
 #include "toolframework/itoolentity.h"
+
+#include "steam/steam_api.h"
+#include "steam/steam_gameserver.h"
 
 extern IVEngineServer	*engine;
 extern IPlayerInfoManager *playerinfomanager;

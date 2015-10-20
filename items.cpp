@@ -28,11 +28,6 @@ ConVar tftrue_no_misc("tftrue_no_misc", "0", FCVAR_NOTIFY, "Activate/Desactivate
 					  true, 0, true, 1, CItems::RebuildWhitelist);
 ConVar tftrue_no_action("tftrue_no_action", "0", FCVAR_NOTIFY, "Activate/Desactivate action items.",
 						true, 0, true, 1, CItems::RebuildWhitelist);
-ConVar tftrue_whitelist("tftrue_whitelist", "0", FCVAR_NOTIFY, "Available whitelists:\n"
-															   "0: Disabled\n"
-															   "1: ETF2L 6on6\n"
-															   "2: ETF2L 9on9",
-						true, 0, true, 2, CItems::RebuildWhitelist);
 ConVar tftrue_whitelist_id("tftrue_whitelist_id", "-1", FCVAR_NOTIFY, "ID of the whitelist to use from whitelist.tf", CItems::RebuildWhitelist);
 
 CItems::CItems()
@@ -63,7 +58,7 @@ bool CItems::Init(const CModuleScanner& ServerModule)
 	RemoveWearable = (void (*)(void *, void*))ServerModule.FindSymbol("_ZN11CBasePlayer14RemoveWearableEP13CEconWearable");
 #else
 	void *GetLoadoutItem = ServerModule.FindSignature(
-				(unsigned char*)"\x55\x8B\xEC\x51\x53\x56\x8B\xF1\x8B\x0D", "xxxxxxxxxx");
+				(unsigned char*)"\x55\x8B\xEC\x51\x53\x56\x8B\xF1\x8B\x0D\x00\x00\x00\x00\x57\x89\x75\xFC", "xxxxxxxxxx????xxxx");
 	ReloadWhitelist = ServerModule.FindSignature(
 				(unsigned char*)"\x55\x8B\xEC\x83\xEC\x0C\x53\x56\x57\x8B\xD9\xC6\x45\xFF\x01", "xxxxxxxxxxxxxxx");
 	ItemSystem = ServerModule.FindSignature(
@@ -73,7 +68,7 @@ bool CItems::Init(const CModuleScanner& ServerModule)
 	GiveDefaultItems = ServerModule.FindSignature(
 				(unsigned char *)"\x55\x8B\xEC\x51\x53\x8B\xD9\x56\xFF\xB3", "xxxxxxxxxx");
 	GetItemDefinition = ServerModule.FindSignature(
-				(unsigned char*)"\x55\x8B\xEC\x56\x8B\xF1\x8D\x45\x08\x57\x50\x8D\x4E\x68", "xxxxxxxxxxxxxx");
+				(unsigned char*)"\x55\x8B\xEC\x56\x8B\xF1\x8D\x45\x08\x57\x50\x8D\x8E\x00\x00\x00\x00\xE8", "xxxxxxxxxxxxx????x");
 #endif
 
 	if(!GetLoadoutItem)
@@ -170,14 +165,27 @@ void CItems::RebuildWhitelist(IConVar *var, const char *pOldValue, float flOldVa
 		SOCKET sock = INVALID_SOCKET;
 		if(ConnectToHost("whitelist.tf", sock))
 		{
+			int iWhiteListID = 0;
 			char szConfigURL[50];
-			V_snprintf(szConfigURL, sizeof(szConfigURL), "whitelist.tf/custom_whitelist_%d.txt", tftrue_whitelist_id.GetInt());
+			char szConfigPath[50];
+
+			// Handle int vs string whitelist ids
+			if(sscanf(tftrue_whitelist_id.GetString(), "%d", &iWhiteListID) == 1)
+			{
+				V_snprintf(szConfigURL, sizeof(szConfigURL), "whitelist.tf/custom_whitelist_%d.txt", tftrue_whitelist_id.GetInt());
+				V_snprintf(szConfigPath, sizeof(szConfigPath), "cfg/custom_whitelist_%d.txt", tftrue_whitelist_id.GetInt());
+			}
+			else
+			{
+				V_snprintf(szConfigURL, sizeof(szConfigURL), "whitelist.tf/%s.txt", tftrue_whitelist_id.GetString());
+				V_snprintf(szConfigPath, sizeof(szConfigPath), "cfg/%s.txt", tftrue_whitelist_id.GetString());
+			}
+
+			// Download our whitelist
 			g_Tournament.DownloadConfig(szConfigURL, sock);
 			closesocket(sock);
 
-			char szConfigPath[50];
-			V_snprintf(szConfigPath, sizeof(szConfigPath), "cfg/custom_whitelist_%d.txt", tftrue_whitelist_id.GetInt());
-
+			// Read the whitelist display name for the tftrue commands
 			FileHandle_t fh = filesystem->Open(szConfigPath, "r", "MOD");
 			if(fh)
 			{
@@ -203,35 +211,8 @@ void CItems::RebuildWhitelist(IConVar *var, const char *pOldValue, float flOldVa
 	}
 	else
 	{
-		switch(tftrue_whitelist.GetInt())
-		{
-		case CTournament::CONFIG_NONE:
-			if(strcmp(g_Items.szWhiteListChosen, ""))
-				g_Items.item_whitelist->LoadFromFile(filesystem, g_Items.szWhiteListChosen, "MOD");
-			break;
-		case CTournament::CONFIG_ETF2L6v6:
-		{
-			SOCKET sock = INVALID_SOCKET;
-			if(ConnectToHost("etf2l.org", sock))
-			{
-				g_Tournament.DownloadConfig("etf2l.org/configs/etf2l_whitelist_6v6.txt", sock);
-				g_Items.item_whitelist->LoadFromFile(filesystem, "cfg/etf2l_whitelist_6v6.txt", "MOD");
-				closesocket(sock);
-			}
-		}
-			break;
-		case CTournament::CONFIG_ETF2L9v9:
-		{
-			SOCKET sock = INVALID_SOCKET;
-			if(ConnectToHost("etf2l.org", sock))
-			{
-				g_Tournament.DownloadConfig("etf2l.org/configs/etf2l_whitelist_9v9.txt", sock);
-				g_Items.item_whitelist->LoadFromFile(filesystem, "cfg/etf2l_whitelist_9v9.txt", "MOD");
-				closesocket(sock);
-			}
-		}
-			break;
-		}
+		if(strcmp(g_Items.szWhiteListChosen, ""))
+			g_Items.item_whitelist->LoadFromFile(filesystem, g_Items.szWhiteListChosen, "MOD");
 	}
 	
 	if(!g_Items.item_whitelist->FindKey("unlisted_items_default_to", false))
@@ -332,5 +313,5 @@ const char* CItems::GetItemLogName(int iDefIndex)
 	if(!pItemDefinition)
 		return nullptr;
 
-	return *(char**)((char*)pItemDefinition + 216);
+	return *(char**)((char*)pItemDefinition + 208);
 }
